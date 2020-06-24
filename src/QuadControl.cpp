@@ -70,10 +70,13 @@ VehicleCommand QuadControl::GenerateMotorCommands(float collThrustCmd, V3F momen
 
   ////////////////////////////// BEGIN STUDENT CODE ///////////////////////////
 
+  //TODO: This is the starter code that will be replaced.
   cmd.desiredThrustsN[0] = mass * 9.81f / 4.f; // front left
   cmd.desiredThrustsN[1] = mass * 9.81f / 4.f; // front right
   cmd.desiredThrustsN[2] = mass * 9.81f / 4.f; // rear left
   cmd.desiredThrustsN[3] = mass * 9.81f / 4.f; // rear right
+
+  //TODO: The motors are numbered differently?
 
   /////////////////////////////// END STUDENT CODE ////////////////////////////
 
@@ -95,10 +98,25 @@ V3F QuadControl::BodyRateControl(V3F pqrCmd, V3F pqr)
   //  - you'll also need the gain parameter kpPQR (it's a V3F)
 
   V3F momentCmd;
+  V3F pqr_error;
+  V3F u_bar_pqr;
+  V3F moments_of_inertia = V3F(Ixx, Iyy, Izz);
 
   ////////////////////////////// BEGIN STUDENT CODE ///////////////////////////
+  // Proportional Controller - need error and p term.
+  // How will I use those moments again? We didn't do that in Python.
+    // Maybe grab the formulas from set_propeller_angular_velocities()?
+    // Is there a full up python solution where they actually used these functions?
+  // Do I need to convert between frames or anything?
 
-  
+  // p, q, r are velocities, angular velocities.
+  // u_bar_p, u_bar_q, u_bar_r are accelerations(?)
+  // TODO: I just don't get how we do subtraction on velocities, then multiply by a 
+  // coefficient, and then end up with acceleration.
+
+  // pqr_error = pqrCmd - pqr;
+  // u_bar_pqr = kpPQR * pqr_error;
+  // momentCmd = u_bar_pqr * moments_of_inertia;
 
   /////////////////////////////// END STUDENT CODE ////////////////////////////
 
@@ -228,6 +246,16 @@ float QuadControl::YawControl(float yawCmd, float yaw)
   return yawRateCmd;
 
 }
+
+// JAS: Ok, so this is really the entry point for my controller.
+// JAS: I get the simTime/dt, the next desired trajectory point (x, y, z, velocities)
+// JAS: I output 4 individual motor thrust amounts. Which can be straightforwardly converted to propeller speeds.
+/* INPUTS 
+  - simTime, dt
+  - curTrajPoint - desired position (x, y, z), desired velocity (x_dot, y_dot, z_dot), desired accel
+  - estPos (x, y, z)
+  - estVel 
+*/
 
 VehicleCommand QuadControl::RunControl(float dt, float simTime)
 {
