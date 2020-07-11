@@ -74,35 +74,121 @@ VehicleCommand QuadControl::GenerateMotorCommands(float collThrustCmd, V3F momen
   // "L" - arm length parameter. 
   // "kappa" - ratio between thrust [N] and torque due to drag [N m]
 
-  // Must find the length to the "axis" instead of length to the "origin".
-  // Need to do some trig. 
-  // Since L is length at a 45 degree angle, we need to multiply by cos(45), or 1/sqrt(2).
+  /*
+    "kappa" is derived from the two core equations we have been using for
+    force and torque of the propellors:
+      F = kf * omega^2
+      tau = km * omega^2
+    
+    kappa = F/tau = kf/km
+
+    Also, tau = kappa * F
+    
+    This ratio becomes useful when we want to solve our set of linear equations
+    for the F1/F2/F3/F4.
+
+    We have the following equation, assuming propellors 1 and 3 are rotating clockwise:
+      tau_z = -tau_1 + tau_2 + -tau_3 + tau_4
+    Where tau_1 is the reactive moment around the z axis caused by propellor one rotating.
+
+    We can replace those tau_1/tau_2/tau_3/tau_4 using kappa!
+      tau_z = -(kappa*F1) + (kappa*F2) + -(kappa*F3) + (kappa*F4)
+      tau_z = (-F1 + F2 + -F3 + F4) * kappa
+  */
+
+  /* 
+    The term "L" is given to us, but it is the length of the motors to the 
+    origin of the vehicle. For our torque calculations, we need the length
+    of the motors to the given axis we are rotating around.
+
+    Our drone's frame is an X pattern, and the x axis is sticking out the 
+    nose of the drone, between the front two propellors.
+
+    x     X
+     *   *
+       *
+     *   *
+    X     X
+
+    When you form a right triangle between the "L" length and the x axis (or y axis),
+    The angle is 45 degrees. 
+
+    This allows us to use a little trig to get the value of the other side of the triangle.
+
+    Multiply by cos(45), or 1/sqrt(2).
+  */
   float len = L / (sqrtf(2.f));
 
-  // Ok the following equations makes intuitive sense if you think about it. 
-  // Adding rotor force 0 and 2 makes the amount of clockwise motion around
-  // the x axis. Rotor force 1 and 3 counteract that force.
-  // Same thing for the y axis.
-  // Then yaw is a reactive motion from the other rotors.
-  // TODO: wait, not sure on this yaw.
-  // M_x = (F0 - F1 + F2 - F3) * l
-  // M_y = (F0 + F1 - F2 - F3) * l
-  // M_z = M_0 - M_1 - M_2 + M_3
+  /* 
+    Units
+    Keep in mind this function is going from thrust (N) to thrust (N).
+    The only thing we are doing is assigning the amount of thrust to each
+    propellor to achieve the desired 3-axis moment.
+  */
 
-  // Moment = Linear Force * perpendicular distance from axis (L).
-  // Linear Force = M / L
-  float p_bar = momentCmd.x / len;    // x axis
-  float q_bar = momentCmd.y / len;    // y axis 
-  float r_bar = -momentCmd.z / kappa; // z axis
-  float c_bar = collThrustCmd;
+  /*
+    We are given the 3 axis moment, which using the symbology from class,
+    that is tau_x, tau_y, tau_z.
 
-  cmd.desiredThrustsN[0] = (c_bar + p_bar + q_bar + r_bar) / 4.f; // Front Left
-  cmd.desiredThrustsN[1] = (c_bar - p_bar + q_bar - r_bar) / 4.f; // Front Right 
-  cmd.desiredThrustsN[2] = (c_bar + p_bar - r_bar - q_bar) / 4.f; // Rear left 
-  cmd.desiredThrustsN[3] = (c_bar - p_bar - q_bar + r_bar) / 4.f; // Rear Right
+    We are also given the collective thrust, or F_total.
 
-  //TODO: Sort out the math here.
+    We want to get the F1, F2, F3, F4 values.
 
+    Note: In the following equations I have already converted the propellor numbering
+    to the correct numbering for this project (swap 3 and 4).
+
+    We know some equations from the Lesson 4, Full 3D Control notebook:
+      F_total = F1 + F2 + F3 + F4   
+      tau_x = (F1 + F2 + F3 + F4) * len
+      tau_y = (F1 + F2 + F3 + F4) * len
+      tau_z = -tau_1 + tau_2 + -tau_3 + tau_4
+
+    But we don't have tau_1, 2, 3, 4. 
+    However, using kappa, we do have an alternative. See the derivation in
+    the earlier comment block.
+      tau_z = (-F1 + F2 + -F3 + F4) * kappa
+
+    Solving the following set of linear equations:
+      F_total = ( F1 +  F2 +  F3 +  F4)
+      tau_x   = ( F1 + -F2 +  F3 + -F4) * len
+      tau_y   = ( F1 +  F2 + -F3 + -F4) * len
+      tau_z   = (-F1 +  F2 + -F3 +  F4) * kappa
+
+    TODO: solve the linear equation.    
+  */
+
+  float F1, F2, F3, F4;
+  float F_total = collThrustCmd;
+  float tau_x = momentCmd.x;
+  float tau_y = momentCmd.y;
+  float tau_z = momentCmd.z;
+
+  //TODO: Why do we need to negate the z moment?
+  tau_z = -tau_z;
+
+  F1 = 0.25 * (F_total + (tau_x/len) + (tau_y/len) + (tau_z/kappa));
+  F2 = 0.25 * (F_total - (tau_x/len) + (tau_y/len) - (tau_z/kappa));
+  F3 = 0.25 * (F_total + (tau_x/len) - (tau_y/len) - (tau_z/kappa));
+  F4 = 0.25 * (F_total - (tau_x/len) - (tau_y/len) + (tau_z/kappa));
+
+  cmd.desiredThrustsN[0] = F1;
+  cmd.desiredThrustsN[1] = F2;
+  cmd.desiredThrustsN[2] = F3;
+  cmd.desiredThrustsN[3] = F4;
+
+  //TODO: remove when I figure out the math.
+  // Previous, working code:
+  // Moment (M) = Linear Force (F) * perpendicular distance from axis (L).
+  // Solve for F.
+  // F = M / L
+  // float p_bar = momentCmd.x / len;    // x axis
+  // float q_bar = momentCmd.y / len;    // y axis 
+  // float r_bar = -momentCmd.z / kappa; // z axis
+  // float c_bar = collThrustCmd;
+  // cmd.desiredThrustsN[0] = (c_bar + p_bar + q_bar + r_bar) / 4.f; // Front Left
+  // cmd.desiredThrustsN[1] = (c_bar - p_bar + q_bar - r_bar) / 4.f; // Front Right 
+  // cmd.desiredThrustsN[2] = (c_bar + p_bar - r_bar - q_bar) / 4.f; // Rear left 
+  // cmd.desiredThrustsN[3] = (c_bar - p_bar - q_bar + r_bar) / 4.f; // Rear Right
   /////////////////////////////// END STUDENT CODE ////////////////////////////
 
   return cmd;
@@ -200,7 +286,8 @@ V3F QuadControl::RollPitchControl(V3F accelCmd, Quaternion<float> attitude, floa
 
   if (collThrustCmd > 0.0)
   {
-    collAccel = collThrustCmd / mass; // F=ma
+    //TODO: Double check the sign for thrust is appropriate here.
+    collAccel = -collThrustCmd / mass; // F=ma
     x_frac_of_accel = accelCmd.x / collAccel;
     y_frac_of_accel = accelCmd.y / collAccel;
 
@@ -211,11 +298,16 @@ V3F QuadControl::RollPitchControl(V3F accelCmd, Quaternion<float> attitude, floa
     actual_R23 = R(1,2);
 
     //TODO: The units, and the Rotation matrix math is still confusing to me.
-    error_R13 = actual_R13 - target_R13;
-    error_R23 = actual_R23 - target_R23;
+    error_R13 = target_R13 - actual_R13;
+    error_R23 = target_R23 - actual_R23;
 
-    p_cmd = (1/R(2,2)) * (-R(1,0) * kpBank * (error_R13) + R(0,0) * kpBank * error_R23);
-    q_cmd = (1/R(2,2)) * (-R(1,1) * kpBank * (error_R13) + R(0,1) * kpBank * error_R23);
+    //TODO: figure out how the math was different here.
+    // Convert to rates in the body frame.
+    p_cmd = (R(1,0) * (kpBank * error_R13) - R(0,0) * (kpBank * error_R23)) / R(2,2);
+    q_cmd = (R(1,1) * (kpBank * error_R13) - R(0,1) * (kpBank * error_R23)) / R(2,2);
+      
+    //p_cmd = (1/R(2,2)) * (-R(1,0) * kpBank * (error_R13) + R(0,0) * kpBank * (error_R23));
+    //q_cmd = (1/R(2,2)) * (-R(1,1) * kpBank * (error_R13) + R(0,1) * kpBank * (error_R23));
 
     pqrCmd = V3F(p_cmd, q_cmd, 0.0);
   }
@@ -323,7 +415,12 @@ V3F QuadControl::LateralPositionControl(V3F posCmd, V3F velCmd, V3F pos, V3F vel
   accelCmd.x = CONSTRAIN(accelCmd.x, -maxAccelXY, maxAccelXY);
   accelCmd.y = CONSTRAIN(accelCmd.y, -maxAccelXY, maxAccelXY);
 
-  printf("accel x: %f, accel y: %f\n", accelCmd.x, accelCmd.y);
+  //printf("accel x: %f, accel y: %f\n", accelCmd.x, accelCmd.y);
+  //printf("pos x: %f, pos y: %f\n", pos.x, pos.y);
+  //printf("des pos x: %f, des pos y: %f\n", posCmd.x, posCmd.y);
+  //printf("vel x: %f, vel y: %f\n", vel.x, vel.y);
+  //printf("des vel x: %f, des vel y: %f\n", velCmd.x, velCmd.y);
+  //printf("------\n");
 
   /////////////////////////////// END STUDENT CODE ////////////////////////////
 
@@ -345,7 +442,7 @@ float QuadControl::YawControl(float yawCmd, float yaw)
 
   float yawRateCmd=0;
   ////////////////////////////// BEGIN STUDENT CODE ///////////////////////////
-
+  yawRateCmd = kpYaw * (yawCmd - yaw);
 
   /////////////////////////////// END STUDENT CODE ////////////////////////////
 
