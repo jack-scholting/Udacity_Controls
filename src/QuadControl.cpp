@@ -153,8 +153,18 @@ VehicleCommand QuadControl::GenerateMotorCommands(float collThrustCmd, V3F momen
       tau_x   = ( F1 + -F2 +  F3 + -F4) * len
       tau_y   = ( F1 +  F2 + -F3 + -F4) * len
       tau_z   = (-F1 +  F2 + -F3 +  F4) * kappa
+    
+    Or:
+      F_total     =  F1 +  F2 +  F3 +  F4
+      tau_x/len   =  F1 + -F2 +  F3 + -F4
+      tau_y/len   =  F1 +  F2 + -F3 + -F4
+      tau_z/kappa = -F1 +  F2 +  F3 + -F4
 
-    TODO: solve the linear equation.    
+    Solving the linear equations gives the following formulas:
+      F1 = (F_total + (tau_x/len) + (tau_y/len) - (tau_z/kappa)) / 4
+      F2 = (F_total - (tau_x/len) + (tau_y/len) + (tau_z/kappa)) / 4
+      F3 = (F_total + (tau_x/len) - (tau_y/len) + (tau_z/kappa)) / 4
+      F4 = (F_total - (tau_x/len) - (tau_y/len) - (tau_z/kappa)) / 4
   */
 
   float F1, F2, F3, F4;
@@ -163,13 +173,10 @@ VehicleCommand QuadControl::GenerateMotorCommands(float collThrustCmd, V3F momen
   float tau_y = momentCmd.y;
   float tau_z = momentCmd.z;
 
-  //TODO: Why do we need to negate the z moment?
-  tau_z = -tau_z;
-
-  F1 = 0.25 * (F_total + (tau_x/len) + (tau_y/len) + (tau_z/kappa));
-  F2 = 0.25 * (F_total - (tau_x/len) + (tau_y/len) - (tau_z/kappa));
-  F3 = 0.25 * (F_total + (tau_x/len) - (tau_y/len) - (tau_z/kappa));
-  F4 = 0.25 * (F_total - (tau_x/len) - (tau_y/len) + (tau_z/kappa));
+  F1 = 0.25 * (F_total + (tau_x/len) + (tau_y/len) - (tau_z/kappa));
+  F2 = 0.25 * (F_total - (tau_x/len) + (tau_y/len) + (tau_z/kappa));
+  F3 = 0.25 * (F_total + (tau_x/len) - (tau_y/len) + (tau_z/kappa));
+  F4 = 0.25 * (F_total - (tau_x/len) - (tau_y/len) - (tau_z/kappa));
 
   cmd.desiredThrustsN[0] = F1;
   cmd.desiredThrustsN[1] = F2;

@@ -16,7 +16,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "338"
             endingLineNumber = "338"
-            landmarkName = "QuadControl::LateralPositionControl(posCmd, velCmd, pos, vel, accelCmdFF)"
+            landmarkName = "QuadControl::AltitudeControl(posZCmd, velZCmd, posZ, velZ, attitude, accelZCmd, dt)"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
@@ -32,7 +32,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "329"
             endingLineNumber = "329"
-            landmarkName = "QuadControl::LateralPositionControl(posCmd, velCmd, pos, vel, accelCmdFF)"
+            landmarkName = "QuadControl::RollPitchControl(accelCmd, attitude, collThrustCmd)"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
@@ -48,7 +48,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "326"
             endingLineNumber = "326"
-            landmarkName = "QuadControl::LateralPositionControl(posCmd, velCmd, pos, vel, accelCmdFF)"
+            landmarkName = "QuadControl::RollPitchControl(accelCmd, attitude, collThrustCmd)"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
@@ -64,7 +64,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "235"
             endingLineNumber = "235"
-            landmarkName = "QuadControl::RollPitchControl(accelCmd, attitude, collThrustCmd)"
+            landmarkName = "QuadControl::BodyRateControl(pqrCmd, pqr)"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
@@ -80,7 +80,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "201"
             endingLineNumber = "201"
-            landmarkName = "QuadControl::RollPitchControl(accelCmd, attitude, collThrustCmd)"
+            landmarkName = "QuadControl::GenerateMotorCommands(collThrustCmd, momentCmd)"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
@@ -96,7 +96,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "213"
             endingLineNumber = "213"
-            landmarkName = "QuadControl::RollPitchControl(accelCmd, attitude, collThrustCmd)"
+            landmarkName = "QuadControl::BodyRateControl(pqrCmd, pqr)"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
@@ -112,7 +112,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "214"
             endingLineNumber = "214"
-            landmarkName = "QuadControl::RollPitchControl(accelCmd, attitude, collThrustCmd)"
+            landmarkName = "QuadControl::BodyRateControl(pqrCmd, pqr)"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
@@ -128,7 +128,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "208"
             endingLineNumber = "208"
-            landmarkName = "QuadControl::RollPitchControl(accelCmd, attitude, collThrustCmd)"
+            landmarkName = "QuadControl::BodyRateControl(pqrCmd, pqr)"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
