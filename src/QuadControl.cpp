@@ -8,6 +8,8 @@
 #include "BaseController.h"
 #include "Math/Mat3x3F.h"
 
+#include "Angles.h" // for AngleNormF()
+
 #ifdef __PX4_NUTTX
 #include <systemlib/param/param.h>
 #endif
@@ -34,7 +36,6 @@ void QuadControl::Init()
   kpBank = config->Get(_config + ".kpBank", 0);
   kpYaw = config->Get(_config + ".kpYaw", 0);
 
-  //JAS - used.
   kpPQR = config->Get(_config + ".kpPQR", V3F());
 
   maxDescentRate = config->Get(_config + ".maxDescentRate", 100);
@@ -153,6 +154,8 @@ VehicleCommand QuadControl::GenerateMotorCommands(float collThrustCmd, V3F momen
       tau_x   = ( F1 + -F2 +  F3 + -F4) * len
       tau_y   = ( F1 +  F2 + -F3 + -F4) * len
       tau_z   = (-F1 +  F2 + -F3 +  F4) * kappa
+
+    TODO: Now apply the unexplained negation to tau_z.
     
     Or:
       F_total     =  F1 +  F2 +  F3 +  F4
@@ -182,20 +185,6 @@ VehicleCommand QuadControl::GenerateMotorCommands(float collThrustCmd, V3F momen
   cmd.desiredThrustsN[1] = F2;
   cmd.desiredThrustsN[2] = F3;
   cmd.desiredThrustsN[3] = F4;
-
-  //TODO: remove when I figure out the math.
-  // Previous, working code:
-  // Moment (M) = Linear Force (F) * perpendicular distance from axis (L).
-  // Solve for F.
-  // F = M / L
-  // float p_bar = momentCmd.x / len;    // x axis
-  // float q_bar = momentCmd.y / len;    // y axis 
-  // float r_bar = -momentCmd.z / kappa; // z axis
-  // float c_bar = collThrustCmd;
-  // cmd.desiredThrustsN[0] = (c_bar + p_bar + q_bar + r_bar) / 4.f; // Front Left
-  // cmd.desiredThrustsN[1] = (c_bar - p_bar + q_bar - r_bar) / 4.f; // Front Right 
-  // cmd.desiredThrustsN[2] = (c_bar + p_bar - r_bar - q_bar) / 4.f; // Rear left 
-  // cmd.desiredThrustsN[3] = (c_bar - p_bar - q_bar + r_bar) / 4.f; // Rear Right
   /////////////////////////////// END STUDENT CODE ////////////////////////////
 
   return cmd;
@@ -220,19 +209,33 @@ V3F QuadControl::BodyRateControl(V3F pqrCmd, V3F pqr)
   V3F pqr_error;
   V3F u_bar_pqr;
   V3F moments_of_inertia = V3F(Ixx, Iyy, Izz);
-  V3F momentCmd; // Output 
+  V3F momentCmd; // Output
 
-  // p, q, r are angular velocities in rad/s.
-  // u_bar_p, u_bar_q, u_bar_r are accelerations in rad/s^2.
-  // Moments of Inertia have units kg*m^2
-  // momentCmd is roll moment, pitch moment, yaw moment in N*m.
-    // Newtons are (kg*m)/s^2
-  
-  //TODO: Ask the question about the units.
+  /* Units
+    Inputs:
+      p, q, r (both commanded and actual) are angular velocities in rad/s in the body frame.
+      Ixx, Iyy, Izz are Moments of Inertia in kg*m^2.
+    Intermediates:
+      u_bar_p, u_bar_q, u_bar_r are accelerations in rad/s^2.
+    Outputs:
+      momentCmd is roll moment, pitch moment, yaw moment in N*m.
+         Newtons are (kg*m)/s^2
+  */
 
+  /* Math
+    The BodyRate controller is a simple "P" controller for the body rates (p, q, r).
+
+    The only quirk is that the controller needs to convert the commanded body 
+    accelerations to commanded moments for the GenerateMotorCommands() function.
+
+    To do this conversion, we use the formula given at the very beginning of the
+    controls lectures. Lesson 1.2.
+      Moment about a given axis = (Moment of Inertia for that axis) * (Acceleration about that axis)
+      M_x = I_xx * u_bar_p
+  */
   pqr_error = pqrCmd - pqr;
   u_bar_pqr = kpPQR * pqr_error;
-  momentCmd = u_bar_pqr * moments_of_inertia;
+  momentCmd = moments_of_inertia * u_bar_pqr;
 
   /////////////////////////////// END STUDENT CODE ////////////////////////////
 
@@ -258,69 +261,94 @@ V3F QuadControl::RollPitchControl(V3F accelCmd, Quaternion<float> attitude, floa
   //  - you'll need the roll/pitch gain kpBank
   //  - collThrustCmd is a force in Newtons! You'll likely want to convert it to acceleration first
 
-  V3F pqrCmd = V3F(0.0, 0.0, 0.0);
+  V3F pqrCmd;
   Mat3x3F R = attitude.RotationMatrix_IwrtB();
 
   ////////////////////////////// BEGIN STUDENT CODE ///////////////////////////
-  // So why do we need those rotation matrices?
-  // Why do we need those cells specifically?
-  // Is this where we go from the world frame to the body frame? Yes I think so.
-    // We need to do this when we go from attitudes to body rates! And we are doing that here.
-  // This is a different rotation matrix than the one first introduced right? To apply pitch/roll/yaw?
-  // Do we have a max/min tilt? If so, maybe "CONSTRAIN".
 
-        // R = euler2RM(attitude[0], attitude[1], attitude[2])
-        // c_d = thrust_cmd/DRONE_MASS_KG
-        
-        // target_R13 = -np.clip(acceleration_cmd[0].item()/c_d, -self.max_tilt, self.max_tilt) #-min(max(acceleration_cmd[0].item()/c_d, -self.max_tilt), self.max_tilt)
-        //   target_R23 = -np.clip(acceleration_cmd[1].item()/c_d, -self.max_tilt, self.max_tilt) #-min(max(acceleration_cmd[1].item()/c_d, -self.max_tilt), self.max_tilt)
-          
-        //   p_cmd = (1/R[2, 2]) *
-        //           (-R[1, 0] * self.Kp_roll * (R[0, 2]-target_R13) +
-        //             R[0, 0] * self.Kp_pitch * (R[1, 2]-target_R23))
-        //   q_cmd = (1/R[2, 2]) *
-        //           (-R[1, 1] * self.Kp_roll * (R[0, 2]-target_R13) +
-        //             R[0, 1] * self.Kp_pitch * (R[1, 2]-target_R23))
+  /* Overview
+  The Roll-Pitch Controller is a simple "P" controller.
+
+  A few things make it kind of complicated though:
+  - The inputs and outputs aren't the same. The inputs are total thrust, current attitude,
+    desired acceleration in X and Y directions. But the outputs are angular velocities.
+  - The inputs are in the world frame, but the outputs are in the body frame.
+  */
 
   float target_R13, target_R23;
   float actual_R13, actual_R23;
   float error_R13, error_R23;
-  float collAccel, x_frac_of_accel, y_frac_of_accel;
+  float collAccel;
   float p_cmd, q_cmd;
 
-  // All these terms are in the *world* frame.
-  // P Controller.
-
-  if (collThrustCmd > 0.0)
+  if (collThrustCmd <= 0.0)
   {
-    //TODO: Double check the sign for thrust is appropriate here.
-    collAccel = -collThrustCmd / mass; // F=ma
-    x_frac_of_accel = accelCmd.x / collAccel;
-    y_frac_of_accel = accelCmd.y / collAccel;
-
-    target_R13 = x_frac_of_accel;
-    target_R23 = y_frac_of_accel;
-
-    actual_R13 = R(0,2);
-    actual_R23 = R(1,2);
-
-    //TODO: The units, and the Rotation matrix math is still confusing to me.
-    error_R13 = target_R13 - actual_R13;
-    error_R23 = target_R23 - actual_R23;
-
-    //TODO: figure out how the math was different here.
-    // Convert to rates in the body frame.
-    p_cmd = (R(1,0) * (kpBank * error_R13) - R(0,0) * (kpBank * error_R23)) / R(2,2);
-    q_cmd = (R(1,1) * (kpBank * error_R13) - R(0,1) * (kpBank * error_R23)) / R(2,2);
-      
-    //p_cmd = (1/R(2,2)) * (-R(1,0) * kpBank * (error_R13) + R(0,0) * kpBank * (error_R23));
-    //q_cmd = (1/R(2,2)) * (-R(1,1) * kpBank * (error_R13) + R(0,1) * kpBank * (error_R23));
-
-    pqrCmd = V3F(p_cmd, q_cmd, 0.0);
+    // Thrust is zero or negative. Set rates as zero.
+    printf("Warning: Negative thrust command.\n");
+    pqrCmd = V3F(0.0, 0.0, 0.0);
   }
   else
   {
-    // Thrust is zero or negative. Leave rates as zero.
+    /* 
+      Get the collective acceleration. 
+
+      This can be done with a=F/m, which is derived from F=ma.
+
+      The thrust must be negated because of the NED frame. It is supplied
+      from the Altitude Controller as a magnitude without a sign.
+    */
+    collAccel = -collThrustCmd / mass;
+
+    /*
+      Get the target R13 and R23 values.
+
+      As the lecture describes, R13 and R23 are our "control knobs" for 
+      controlling the X and Y positions.
+
+      To do this, we use the formula presented in 4.17 and the 
+      Feed Forward Parameter Identification paper:
+      (https://www.dynsyslab.org/wp-content/papercite-data/pdf/schoellig-acc12.pdf).
+
+      Note: Per the paper: R13, R23, R33 "represent the direction of the collective thrust in the inertial frame O"
+
+      x_dot_dot = total_thrust * R13
+      y_dot_dot = total_thrust * R23
+
+      Rearranged:
+
+      target_R13 = x_dot_dot / total_thrust
+      target_R23 = y_dot_dot / total_thrust
+    */
+    //TODO: but why do we use acceleration then!!! See my mentor question.
+    target_R13 = accelCmd.x / collAccel;
+    target_R23 = accelCmd.y / collAccel;
+
+    // Limit the target R13/R23 values.
+    // Note: This limit is critical, otherwise the tilt will be commanded to such 
+    //       a large value that the drone will flip over.
+    target_R13 = CONSTRAIN(target_R13, -maxTiltAngle, maxTiltAngle);
+    target_R23 = CONSTRAIN(target_R23, -maxTiltAngle, maxTiltAngle);
+
+
+    // Name the matrix elements for clarity.
+    actual_R13 = R(0,2);
+    actual_R23 = R(1,2);
+
+    // Calculate the error.
+    error_R13 = target_R13 - actual_R13;
+    error_R23 = target_R23 - actual_R23;
+
+    /* 
+      Get the rates in the body frame.
+
+      To do this, we use the formula presented in 4.17 and the 
+      Feed Forward Parameter Identification paper, formula #6:
+      (https://www.dynsyslab.org/wp-content/papercite-data/pdf/schoellig-acc12.pdf).
+    */
+    p_cmd = (R(1,0) * (kpBank * error_R13) - R(0,0) * (kpBank * error_R23)) / R(2,2);
+    q_cmd = (R(1,1) * (kpBank * error_R13) - R(0,1) * (kpBank * error_R23)) / R(2,2);
+
+    pqrCmd = V3F(p_cmd, q_cmd, 0.0);
   }
   
   /////////////////////////////// END STUDENT CODE ////////////////////////////
@@ -352,22 +380,52 @@ float QuadControl::AltitudeControl(float posZCmd, float velZCmd, float posZ, flo
   float thrust_z = 0;
 
   ////////////////////////////// BEGIN STUDENT CODE ///////////////////////////
+  /* Overview
+    The Altitude Controller is a "PID" controller.
+
+    The only complication is that this function must return a z force, not an z acceleration.
+
+    Our inputs are in NED. The function should actually output a thrust, not in the NED frame.
+  */
   float pos_error_z, vel_error_z, rate, accel_z, c;
 
+  // Limit the commanded velocity.
+  //TODO: keep an eye on this, it is a different place to limit rate than other people.
+  velZCmd = CONSTRAIN(velZCmd, -maxAscentRate, maxDescentRate);
 
+  // Calculate the commanded z acceleration using standard PID controller math.
   pos_error_z = posZCmd - posZ;
   vel_error_z = velZCmd - velZ;
-  accel_z = (kpPosZ * pos_error_z) + (kpVelZ * vel_error_z) + accelZCmd;
+  integratedAltitudeError += (pos_error_z * dt);
+  accel_z = (kpPosZ * pos_error_z) + (kpVelZ * vel_error_z) + (KiPosZ * integratedAltitudeError) + accelZCmd;
 
-  //TODO: Get the sign right.
-  //TODO: What is attitude needed for? Not in my diagram.
-  // It looks like it is needed to calculate thrust, since you have to grab
-  // the component that is vertical.
-  //TODO: Convert acceleration to a force.
+//TODO: convert all my "c" = collective thrusts to collective accelerations if I am right.
+  /* 
+    Convert the acceleration (an acceleration) to thrust (a force).
+
+    Using the equation from 4.17:
+
+    z_dot_dot = c * b_z + g
+
+    or 
+
+    z_dot_dot = collective_thrust * R33 + g
+
+    Solve for collective_thrust.
+
+    collective_thrust = (z_dot_dot - g) / R33
+
+    Note: So the rotation matrix is needed for R33, which helps us figure out
+    how much of the collective thrust contributes to the z direction.
+  */
   c = (accel_z - CONST_GRAVITY) / R(2,2);
 
-  // rate = CONSTRAIN(rate, -maxAscentRate, maxDescentRate);
+  //TODO: why am I doing this? I thought I already had a force! This is needed to work!
+  // All my calculations would work out if "c" was actually collective acceleration!!!!
   thrust_z = -(c * mass);
+
+  // From python:
+  // thrust = DRONE_MASS_KG * acceleration_cmd / R33
 
   /////////////////////////////// END STUDENT CODE ////////////////////////////
   
@@ -404,30 +462,26 @@ V3F QuadControl::LateralPositionControl(V3F posCmd, V3F velCmd, V3F pos, V3F vel
   V3F accelCmd = accelCmdFF;
 
   ////////////////////////////// BEGIN STUDENT CODE ///////////////////////////
+  /* Overview
+    The Lateral Position Controller is a "PD" controller.
+  */
   float x_vel_cmd, y_vel_cmd;
-
-  //TODO: This is a PD controller right?
 
   x_vel_cmd = kpVelXY * (velCmd.x - vel.x);
   y_vel_cmd = kpVelXY * (velCmd.y - vel.y);
 
   // Limit max horizontal velocity.
-  x_vel_cmd = CONSTRAIN(x_vel_cmd, -maxSpeedXY, maxSpeedXY);
-  y_vel_cmd = CONSTRAIN(y_vel_cmd, -maxSpeedXY, maxSpeedXY);
+  // x_vel_cmd = CONSTRAIN(x_vel_cmd, -maxSpeedXY, maxSpeedXY);
+  // y_vel_cmd = CONSTRAIN(y_vel_cmd, -maxSpeedXY, maxSpeedXY);
 
   accelCmd.x = kpPosXY * (posCmd.x - pos.x) + x_vel_cmd + accelCmdFF.x;
   accelCmd.y = kpPosXY * (posCmd.y - pos.y) + y_vel_cmd + accelCmdFF.y;
 
   // Limit max horizontal acceleration.
-  accelCmd.x = CONSTRAIN(accelCmd.x, -maxAccelXY, maxAccelXY);
-  accelCmd.y = CONSTRAIN(accelCmd.y, -maxAccelXY, maxAccelXY);
+  // accelCmd.x = CONSTRAIN(accelCmd.x, -maxAccelXY, maxAccelXY);
+  // accelCmd.y = CONSTRAIN(accelCmd.y, -maxAccelXY, maxAccelXY);
 
-  //printf("accel x: %f, accel y: %f\n", accelCmd.x, accelCmd.y);
-  //printf("pos x: %f, pos y: %f\n", pos.x, pos.y);
-  //printf("des pos x: %f, des pos y: %f\n", posCmd.x, posCmd.y);
-  //printf("vel x: %f, vel y: %f\n", vel.x, vel.y);
-  //printf("des vel x: %f, des vel y: %f\n", velCmd.x, velCmd.y);
-  //printf("------\n");
+  //TODO: HOLY MOLY - why was this such a problem! Completely changes the drone behavior!
 
   /////////////////////////////// END STUDENT CODE ////////////////////////////
 
@@ -449,24 +503,37 @@ float QuadControl::YawControl(float yawCmd, float yaw)
 
   float yawRateCmd=0;
   ////////////////////////////// BEGIN STUDENT CODE ///////////////////////////
-  yawRateCmd = kpYaw * (yawCmd - yaw);
+  /* Math
+    The Yaw Controller is a simple "P" controller.
 
+    The only quirk is that you must wrap the yaw values to normalize them
+    as 0 to 2PI, or -PI to PI.
+  */
+  float yaw_error;
+
+  // Ensure the commanded yaw is within 0 to PI.
+  yawCmd = fmodf(yawCmd, 2*M_PI);
+
+  // Ensure the yaw error is within -PI to PI.
+  // Note: The range is -PI to PI since the subtraction can make the value negative.
+  yaw_error = yawCmd - yaw;
+  yaw_error = AngleNormF(yaw_error);
+
+  // Calculate the command.
+  yawRateCmd = kpYaw * yaw_error;
   /////////////////////////////// END STUDENT CODE ////////////////////////////
 
   return yawRateCmd;
 
 }
 
-// JAS: Ok, so this is really the entry point for my controller.
-// JAS: I get the simTime/dt, the next desired trajectory point (x, y, z, velocities)
-// JAS: I output 4 individual motor thrust amounts. Which can be straightforwardly converted to propeller speeds.
 /* INPUTS 
   - simTime, dt
   - curTrajPoint - desired position (x, y, z), desired velocity (x_dot, y_dot, z_dot), desired accel
   - estPos (x, y, z)
   - estVel 
+  - estAtt
 */
-
 VehicleCommand QuadControl::RunControl(float dt, float simTime)
 {
   curTrajPoint = GetNextTrajectoryPoint(simTime);
