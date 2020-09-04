@@ -155,7 +155,8 @@ VehicleCommand QuadControl::GenerateMotorCommands(float collThrustCmd, V3F momen
       tau_y   = ( F1 +  F2 + -F3 + -F4) * len
       tau_z   = (-F1 +  F2 + -F3 +  F4) * kappa
 
-    TODO: Now apply the unexplained negation to tau_z.
+    Now apply the a negation to tau_z.
+    This was a point I was confused about. See https://knowledge.udacity.com/questions/269627.
     
     Or:
       F_total     =  F1 +  F2 +  F3 +  F4
@@ -311,15 +312,16 @@ V3F QuadControl::RollPitchControl(V3F accelCmd, Quaternion<float> attitude, floa
 
       Note: Per the paper: R13, R23, R33 "represent the direction of the collective thrust in the inertial frame O"
 
-      x_dot_dot = total_thrust * R13
-      y_dot_dot = total_thrust * R23
+      x_dot_dot = total_acceleration * R13
+      y_dot_dot = total_acceleration * R23
 
       Rearranged:
 
-      target_R13 = x_dot_dot / total_thrust
-      target_R23 = y_dot_dot / total_thrust
+      target_R13 = x_dot_dot / total_acceleration
+      target_R23 = y_dot_dot / total_acceleration
+
+      Note: I had some confusion on these formulas. See https://knowledge.udacity.com/questions/277700.
     */
-    //TODO: but why do we use acceleration then!!! See my mentor question.
     target_R13 = accelCmd.x / collAccel;
     target_R23 = accelCmd.y / collAccel;
 
@@ -328,7 +330,6 @@ V3F QuadControl::RollPitchControl(V3F accelCmd, Quaternion<float> attitude, floa
     //       a large value that the drone will flip over.
     target_R13 = CONSTRAIN(target_R13, -maxTiltAngle, maxTiltAngle);
     target_R23 = CONSTRAIN(target_R23, -maxTiltAngle, maxTiltAngle);
-
 
     // Name the matrix elements for clarity.
     actual_R13 = R(0,2);
@@ -390,7 +391,6 @@ float QuadControl::AltitudeControl(float posZCmd, float velZCmd, float posZ, flo
   float pos_error_z, vel_error_z, rate, accel_z, c;
 
   // Limit the commanded velocity.
-  //TODO: keep an eye on this, it is a different place to limit rate than other people.
   velZCmd = CONSTRAIN(velZCmd, -maxAscentRate, maxDescentRate);
 
   // Calculate the commanded z acceleration using standard PID controller math.
@@ -399,7 +399,6 @@ float QuadControl::AltitudeControl(float posZCmd, float velZCmd, float posZ, flo
   integratedAltitudeError += (pos_error_z * dt);
   accel_z = (kpPosZ * pos_error_z) + (kpVelZ * vel_error_z) + (KiPosZ * integratedAltitudeError) + accelZCmd;
 
-//TODO: convert all my "c" = collective thrusts to collective accelerations if I am right.
   /* 
     Convert the acceleration (an acceleration) to thrust (a force).
 
@@ -409,23 +408,18 @@ float QuadControl::AltitudeControl(float posZCmd, float velZCmd, float posZ, flo
 
     or 
 
-    z_dot_dot = collective_thrust * R33 + g
+    z_dot_dot = collective_acceleration * R33 + g
 
-    Solve for collective_thrust.
+    Solve for collective_acceleration.
 
-    collective_thrust = (z_dot_dot - g) / R33
+    collective_acceleration = (z_dot_dot - g) / R33
 
     Note: So the rotation matrix is needed for R33, which helps us figure out
-    how much of the collective thrust contributes to the z direction.
+    how much of the collective acceleration contributes to the z direction.
   */
   c = (accel_z - CONST_GRAVITY) / R(2,2);
 
-  //TODO: why am I doing this? I thought I already had a force! This is needed to work!
-  // All my calculations would work out if "c" was actually collective acceleration!!!!
   thrust_z = -(c * mass);
-
-  // From python:
-  // thrust = DRONE_MASS_KG * acceleration_cmd / R33
 
   /////////////////////////////// END STUDENT CODE ////////////////////////////
   
@@ -471,17 +465,19 @@ V3F QuadControl::LateralPositionControl(V3F posCmd, V3F velCmd, V3F pos, V3F vel
   y_vel_cmd = kpVelXY * (velCmd.y - vel.y);
 
   // Limit max horizontal velocity.
-  // x_vel_cmd = CONSTRAIN(x_vel_cmd, -maxSpeedXY, maxSpeedXY);
-  // y_vel_cmd = CONSTRAIN(y_vel_cmd, -maxSpeedXY, maxSpeedXY);
+  // Note: Although the project encourages a limit on the velocity, when I apply this
+  // limit it prevents the drone from achieving the required flight performance. For 
+  // this reason I am not limiting the velocity command.
+  //x_vel_cmd = CONSTRAIN(x_vel_cmd, -maxSpeedXY, maxSpeedXY);
+  //y_vel_cmd = CONSTRAIN(y_vel_cmd, -maxSpeedXY, maxSpeedXY);
 
   accelCmd.x = kpPosXY * (posCmd.x - pos.x) + x_vel_cmd + accelCmdFF.x;
   accelCmd.y = kpPosXY * (posCmd.y - pos.y) + y_vel_cmd + accelCmdFF.y;
 
   // Limit max horizontal acceleration.
-  // accelCmd.x = CONSTRAIN(accelCmd.x, -maxAccelXY, maxAccelXY);
-  // accelCmd.y = CONSTRAIN(accelCmd.y, -maxAccelXY, maxAccelXY);
+  accelCmd.x = CONSTRAIN(accelCmd.x, -maxAccelXY, maxAccelXY);
+  accelCmd.y = CONSTRAIN(accelCmd.y, -maxAccelXY, maxAccelXY);
 
-  //TODO: HOLY MOLY - why was this such a problem! Completely changes the drone behavior!
 
   /////////////////////////////// END STUDENT CODE ////////////////////////////
 
@@ -516,6 +512,7 @@ float QuadControl::YawControl(float yawCmd, float yaw)
 
   // Ensure the yaw error is within -PI to PI.
   // Note: The range is -PI to PI since the subtraction can make the value negative.
+  // This was a point I was confused about. See https://knowledge.udacity.com/questions/270792.
   yaw_error = yawCmd - yaw;
   yaw_error = AngleNormF(yaw_error);
 
