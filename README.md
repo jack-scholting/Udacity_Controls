@@ -4,10 +4,15 @@
 
 ## Introduction ##
 
-TODO: Include my diagram. 
-TODO: Describe the diagram.
-TODO: Sketch the drone itself and its orientation.
-TODO: Include a GIF up front of the end result.
+![Scenario 5](./animations/scenario5.gif)
+
+For this project, I implemented a 3D quadcopter controller in C++. The above animation shows the implemented controller following the yellow trajectory.
+
+![Architecture Diagram](./animations/architecture.jpg)
+
+I created the above diagram to visualize the controller architecture and interfaces. It can be referred to while reading this write-up and reading the code.
+
+Note: The diagram does not include the GenerateMotorCommands() functionality, which was also required for this project.
 
 ## Rubric Points ##
 
@@ -301,7 +306,6 @@ Solving the linear equations gives the following formulas, which were essentiall
     F3 = (F_total + (tau_x/len) - (tau_y/len) + (tau_z/kappa)) / 4
     F4 = (F_total - (tau_x/len) - (tau_y/len) - (tau_z/kappa)) / 4
 
-
 ### Flight Evaluation ###
 
 #### 1. Your C++ controller is successfully able to fly the provided test trajectory and visually passes inspection of the scenarios leading up to the test trajectory ####
@@ -310,5 +314,70 @@ Solving the linear equations gives the following formulas, which were essentiall
 
 My controller passed all required scenarios. See the following captures for proof.
 
-TODO: Insert each gif. 
-TOOD: Explain what each gif is showing.
+##### Scenario 1 #####
+
+![Scenario 1](./animations/scenario1.gif)
+
+Scenario 1 was an introductory scenario. It existed mainly to tune the mass. Without the proper mass, the drone falls straight down.
+
+##### Scenario 2 #####
+
+![Scenario 2](./animations/scenario2.gif)
+
+In Scenario 2, the drone is created with a small initial rotation speed about its roll axis. The controller needed to stabilize the rotational motion and bring the vehicle back to level attitude.
+
+Below are the performance requirements:
+
+- roll should less than 0.025 radian of nominal for 0.75 seconds (3/4 of the duration of the loop)
+- roll rate should less than 2.5 radian/sec for 0.75 seconds
+
+In order to satisfy this scenario, the following parts of the controller had to be implemented:
+
+1. Implement the code in the function GenerateMotorCommands()
+1. Implement the code in the function BodyRateControl()
+1. Tune kpPQR in QuadControlParams.txt to get the vehicle to stop spinning quickly but not overshoot
+
+##### Scenario 3 #####
+
+![Scenario 3](./animations/scenario3.gif)
+
+In Scenario 3, two identical quads are created. One quad has just an offset from the target point. The second quad has an offset from the target point, and also a yaw of 45 degrees. Both quads need to get back to the target point and have a 0 degree yaw.
+
+Below are the performance requirements:
+
+- X position of both drones should be within 0.1 meters of the target for at least 1.25 seconds
+- Quad2 yaw should be within 0.1 of the target for at least 1 second
+
+In order to satisfy this scenario, the following parts of the controller had to be implemented:
+
+1. Implement the code in the function LateralPositionControl()
+1. Implement the code in the function AltitudeControl()
+1. Tune parameters kpPosZ and kpPosZ
+1. Tune parameters kpVelXY and kpVelZ
+1. Implement the code in the function YawControl()
+1. Tune parameters kpYaw and the 3rd (z) component of kpPQR
+
+##### Scenario 4 #####
+
+![Scenario 4](./animations/scenario4.gif)
+
+In Scenario 4, some of the non-idealities and controller robustness was exercised. Three quads are created. The orange quad is an ideal quad. The green quad has its center of mass shifted back. The red quad is heavier than planned.
+
+Below are the performance requirements:
+
+- Position error for all 3 quads should be less than 0.1 meters for at least 1.5 seconds
+
+In order to satisfy this scenario, the following parts of the controller had to be implemented:
+
+1. The code in AltitudeControl() needed to be improved to add an "I" integral term to account for the different mass quad.
+1. The gains needed to be retuned.
+
+##### Scenario 5 #####
+
+![Scenario 5](./animations/scenario5.gif)
+
+In Scenario 5, all parts of the controller are tested by having the quad follow a complex figure-eight trajectory. The scenario has two quads. The yellow quad is the required trajectory. The orange quad is used for an optional challenge which I did not opt to implement.
+
+Below are the performance requirements:
+
+- Position error of the quad should be less than 0.25 meters for at least 3 seconds
