@@ -81,13 +81,13 @@ To do this, we use the formula presented in 4.17 and the Feed Forward Parameter 
 
 Note: Per the paper: R13, R23, R33 "represent the direction of the collective thrust in the inertial frame O"
 
-x_dot_dot = total_acceleration * R13
-y_dot_dot = total_acceleration * R23
+    x_dot_dot = total_acceleration * R13
+    y_dot_dot = total_acceleration * R23
 
 Rearranged:
 
-target_R13 = x_dot_dot / total_acceleration
-target_R23 = y_dot_dot / total_acceleration
+    target_R13 = x_dot_dot / total_acceleration
+    target_R23 = y_dot_dot / total_acceleration
 
 Note: I had some confusion on these formulas. See https://knowledge.udacity.com/questions/277700.
 
